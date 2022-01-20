@@ -1,0 +1,2 @@
+*CvrExport.json.gz filter=lfs diff=lfs merge=lfs -text
+cvr/CvrExport.json.gz filter=lfs diff=lfs merge=lfs -text
