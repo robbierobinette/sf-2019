@@ -1,6 +1,7 @@
 import json
 import os.path as path
 import pickle
+import os
 from typing import List
 
 from elections.Ballot import Ballot
@@ -10,6 +11,8 @@ from elections.HeadToHeadElection import HeadToHeadElection
 from elections.InstantRunoffElection import InstantRunoffElection, InstantRunoffResult
 from elections.Party import NoParty
 from elections.PluralityElection import PluralityResult
+
+dir = "CVR_Export_20220908084311"
 
 
 def pickle_sessions(ss, pickle_file):
@@ -23,7 +26,7 @@ def load_pickled_sessions(count: int):
         return pickle.load(open(pickle_file, "rb"))
     else:
         print("loading cvr from json")
-        cvr = json.load(open("cvr/CvrExport.json", "r"))
+        cvr = json.load(open(f"{dir}/CvrExport.json", "r"))
         ss = cvr['Sessions'][0:count]
         pickle_sessions(ss, pickle_file)
         return ss
@@ -50,10 +53,21 @@ class Contest:
         for m in marks:
             c, r = m['CandidateId'], m['Rank']
             if c in seen_candidates:
+                # this candidate has already been ranked
+                # stop parsing candidates
                 self.over_votes += 1
                 break;
 
+            if r == current_rank:
+                # ranked two different candidates at the same level.
+                # peel off the conflicting candidate that has the same ranking
+                # level.  Stop parsing candidates.
+                self.rank_errors += 1
+                scores.pop()
+                break;
+
             if r != current_rank + 1:
+                # some other type of ranking error, stop parsing candidates
                 self.rank_errors += 1
                 break;
 
@@ -72,7 +86,8 @@ class Contest:
         irv = InstantRunoffElection(self.ballots, set(self.candidates))
         h2h = HeadToHeadElection(self.ballots, set(self.candidates))
         print(f"{self.contest_id}:  {self.name}")
-        print(f"Valid Ballots: {len(self.ballots)}, Over Votes {self.over_votes}, Under Votes {self.under_votes}, Ranking Errors {self.rank_errors}")
+        print(
+            f"Valid Ballots: {len(self.ballots)}, Over Votes {self.over_votes}, Under Votes {self.under_votes}, Ranking Errors {self.rank_errors}")
         print(f"irvWinner {irv.result().winner().name}")
         print(f"h2hWinner {h2h.result().winner().name}")
         self.print_irv_result(irv.result())
@@ -94,24 +109,39 @@ class Contest:
 def parse_all_cvr(sessions, contests, candidate_sets, candidates_by_id):
     elections = {}
     for session in sessions:
-        for contest in session["Original"]["Contests"]:
-            election_id = contest['Id']
+        if len(session["Original"]["Cards"]) > 1:
+            print(f"len(Cards) = {len(session['Original']['Cards'])}")
+        for card in session["Original"]["Cards"]:
+            for contest in card["Contests"]:
+                election_id = contest['Id']
+                if election_id == 69:
+                    if election_id not in elections:
+                        elections[election_id] = Contest(election_id,
+                                                         contests[election_id],
+                                                         candidate_sets[election_id],
+                                                         candidates_by_id)
 
-            if election_id not in elections:
-                elections[election_id] = Contest(election_id,
-                                                 contests[election_id],
-                                                 candidate_sets[election_id],
-                                                 candidates_by_id)
-
-            elections[election_id].add_marks(contest['Marks'])
+                    elections[election_id].add_marks(contest['Marks'])
 
     return elections
 
 
 def main():
     print("loading json")
-    contest_json = json.load(open("cvr/ContestManifest.json", "r"))
-    candidates_json = json.load(open("cvr/CandidateManifest.json"))
+    if not os.path.exists(dir):
+        print (f"""
+        no cast vote record files found at {dir}.  
+        
+        Download the cast vote records from https://www.elections.alaska.gov/election-results/e/?id=22sspg
+        At the bottom of the page, there is a link to the download "Cast Vote Record (zip)".
+        Download that file and unzip it (your browser may automatically unzip it.)
+        place the root directory ./{dir} in the local directory.
+        
+        Alternately, you can change the variable 'dir' at the top of this file to point at the location of the ballots.
+        
+        """)
+    contest_json = json.load(open(f"{dir}/ContestManifest.json", "r"))
+    candidates_json = json.load(open(f"{dir}/CandidateManifest.json"))
 
     print("composing meta data")
     contests = {}
