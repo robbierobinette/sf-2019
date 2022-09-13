@@ -40,38 +40,75 @@ class Contest:
         self.over_votes = 0
         self.under_votes = 0
         self.rank_errors = 0
+        self.ambiguous_mattered = 0
+        self.ambiguous_present = 0
+        self.total_ambiguous = 0
+        self.multiple_rankings = 0
+        self.rank_skips = 0
+        self.write_in_skipped = 0
         self.candidates = candidates
         self.candidates_by_id = candidates_by_id
+        self.write_in_candidates = 0
+        self.write_in_indices = set()
+        self.write_in_densities = {}
 
     def add_marks(self, marks):
-        if len(marks) == 0:
-            self.under_votes += 1
-            return
         seen_candidates = set()
         scores = []
-        current_rank = 0
+        last_rank = 0
+
+        # check if there is any ambiguous mark on the ballot
+        ballot_contains_ambiguous = 0
+        for m in marks:
+            if m['IsAmbiguous']:
+                ballot_contains_ambiguous = 1
+                self.total_ambiguous += 1
+
+            c = m['CandidateId']
+            if self.candidates_by_id[c].name == 'Write-in':
+                self.write_in_candidates += 1
+                if m['WriteinDensity'] in self.write_in_densities:
+                    self.write_in_densities[m['WriteinDensity']] += 1
+                else:
+                    self.write_in_densities[m['WriteinDensity']] = 1
+
+        self.ambiguous_present += ballot_contains_ambiguous
+
         for m in marks:
             c, r = m['CandidateId'], m['Rank']
-            if c in seen_candidates:
-                # this candidate has already been ranked
-                # stop parsing candidates
-                self.over_votes += 1
-                break;
+            if m['IsAmbiguous']:
+                # this mark is ambiguous, mark density is low (< 25) it should be completely ignored.
+                self.ambiguous_mattered += 1
+                continue
 
-            if r == current_rank:
+
+            if c in seen_candidates:
+                # this candidate has already been ranked, ignore the mark
+                # keep parsing the ballot
+                # this does not count as a skipped ranking, so update current rank.
+                self.multiple_rankings += 1
+                last_rank = r
+                continue
+
+            if r == last_rank:
                 # ranked two different candidates at the same level.
                 # peel off the conflicting candidate that has the same ranking
-                # level.  Stop parsing candidates.
-                self.rank_errors += 1
+                # level.  Stop processing the ballot
+                self.over_votes += 1
                 scores.pop()
                 break;
 
-            if r != current_rank + 1:
-                # some other type of ranking error, stop parsing candidates
+            if r == last_rank + 2:
+                # skipped one rank, add this candidate and keep processing
+                self.rank_skips += 1
+
+            if r >= last_rank + 3:
+                # skipped two or more rankings
+                # ignore this ranking and stop processing the ballot
                 self.rank_errors += 1
                 break;
 
-            current_rank = r
+            last_rank = r
             seen_candidates.add(c)
             candidate = self.candidates_by_id[c]
             scores.append(CandidateScore(candidate, 100 - r))
@@ -82,12 +119,25 @@ class Contest:
         else:
             self.under_votes += 1
 
+    def print_stat(self, prefix, count, explanation):
+        print("%20s %7d %s" % (prefix, count, explanation))
     def run_elections(self):
         irv = InstantRunoffElection(self.ballots, set(self.candidates))
         h2h = HeadToHeadElection(self.ballots, set(self.candidates))
         print(f"{self.contest_id}:  {self.name}")
-        print(
-            f"Valid Ballots: {len(self.ballots)}, Over Votes {self.over_votes}, Under Votes {self.under_votes}, Ranking Errors {self.rank_errors}")
+        self.print_stat("Valid Ballots",  len(self.ballots), "ballots with at least one ranking")
+        self.print_stat("Over Votes",  self.over_votes, "multiple candidates at the same ranking level")
+        self.print_stat("Ranking Errors",  self.rank_errors, "skipped two or more ranks")
+        self.print_stat("Rank Skips",  self.rank_skips, "skipped one rank, but kept processing")
+        self.print_stat("Multiple Rankings",  self.multiple_rankings, "single candidate ranked at multiple levels")
+        self.print_stat("Ambiguous Mark",  self.ambiguous_present, "ballot had at least one ambiguous mark")
+        self.print_stat("Ambiguous Mattered",  self.ambiguous_mattered, "ambiguous mark skipped during ballot processing")
+        self.print_stat("Total Ambiguous",  self.ambiguous_mattered, "total ambiguous")
+        self.print_stat("Write In Skipped",  self.write_in_skipped, "Skipped a write-in-candidate")
+        self.print_stat("Write Candidates",  self.write_in_candidates, "detected a write-in-candidate")
+        print("write_in_indices:  ", self.write_in_indices)
+        print("write_in_densities:  ", self.write_in_densities)
+
         print(f"irvWinner {irv.result().winner().name}")
         print(f"h2hWinner {h2h.result().winner().name}")
         self.print_irv_result(irv.result())
@@ -159,6 +209,7 @@ def main():
             candidate_sets[c['ContestId']] = [candidate]
 
     sessions = load_pickled_sessions(1000000)
+    print(f"number of sessions: {len(sessions)}")
     elections = parse_all_cvr(sessions, contests, candidate_sets, candidates_by_id)
     for contest in elections.values():
         contest.run_elections()

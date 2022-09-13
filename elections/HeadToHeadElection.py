@@ -25,7 +25,8 @@ class HeadToHeadResult(ElectionResult):
                 if ci1 != ci2:
                     v1 = self.result_matrix[ci1, ci2]
                     v2 = self.result_matrix[ci2, ci1]
-                    print("%30s %7d %30s %7d % 7d" % (c1.name, v1, c2.name, v2, v1 - v2))
+                    t = v1 + v2
+                    print("%30s %7d %5.2f%% %30s %7d %5.2f%% % 7d" % (c1.name, v1, 100 * v1 / t, c2.name, v2, 100 * v2 / t, v1 - v2))
             print("")
 
 class HeadToHeadElection(Election):
