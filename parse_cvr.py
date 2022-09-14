@@ -159,8 +159,6 @@ class Contest:
 def parse_all_cvr(sessions, contests, candidate_sets, candidates_by_id):
     elections = {}
     for session in sessions:
-        if len(session["Original"]["Cards"]) > 1:
-            print(f"len(Cards) = {len(session['Original']['Cards'])}")
         for card in session["Original"]["Cards"]:
             for contest in card["Contests"]:
                 election_id = contest['Id']
