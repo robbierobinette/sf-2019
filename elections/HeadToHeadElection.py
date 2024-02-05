@@ -16,11 +16,11 @@ class HeadToHeadResult(ElectionResult):
         for k, v in indices.items():
             self.index_to_candidate[v] = k
 
-    def print_matrix(self):
-        for c1 in self.ordered_candidates:
+    def print_matrix(self, count = 4):
+        for c1 in self.ordered_candidates[0:count]:
             ci1 = self.candidate_to_index[c1]
             print(f"results for {c1.name}:")
-            for c2 in self.ordered_candidates:
+            for c2 in self.ordered_candidates[0:count]:
                 ci2 = self.candidate_to_index[c2]
                 if ci1 != ci2:
                     v1 = self.result_matrix[ci1, ci2]
