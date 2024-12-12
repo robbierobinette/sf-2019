@@ -57,9 +57,20 @@ class DiversityRunoffElection(Election):
 
     def compute_diversity(self, active_candidates: Set[Candidate]) -> List[DiversityScore]:
         ballot_orders = defaultdict(dict)
+        ranked_counts = defaultdict(int)
+        all_ordered_names = set()
+
+        num_active_ballots = 0
+        for b in self.ballots:
+            candidates = [c.candidate for c in b.ordered_candidates if c.candidate in active_candidates]
+            if len(candidates) > 0:
+                num_active_ballots += 1
 
         for ballot in self.ballots:
             ordered_candidates = [c.candidate for c in ballot.ordered_candidates if c.candidate in active_candidates]
+            # do not include bullet votes in the diversity_count
+            # candidates should not be judged by the percentage of their bullet votes.
+            # Certainly not rewarded for them.
             if len(ordered_candidates) > 0:
                 first_choice = ordered_candidates[0]
 
@@ -72,30 +83,43 @@ class DiversityRunoffElection(Election):
                     if missing_candidate:
                         ordered_candidates.append(missing_candidate.pop())
 
+                ordered_candidates = ordered_candidates[0:self.diversity_depth]
                 ordered_names = self.join_names(ordered_candidates)
+                all_ordered_names.add(ordered_names)
+                if ordered_names not in ranked_counts:
+                    ranked_counts[ordered_names] = len(ordered_candidates)
+
                 if first_choice not in ballot_orders:
                     ballot_orders[first_choice] = defaultdict(int)
 
                 ballot_orders[first_choice][ordered_names] += 1
 
         diversity_scores = []
+
+        # find the maximum length of any ballot order for any first choice in ballot_orders{}
+        # to do this, I need to flatten the array of array's of keys. into a
+
+
+        max_ballot_order_len = max(len(ballot_order) for ballot_order in all_ordered_names)
+
         for first_choice in ballot_orders.keys():
+
             # sum of vote counts for each ballot order for this first_choice
-            total_votes = sum(ballot_orders[first_choice].values())
+            first_place_votes = sum(ballot_orders[first_choice].values())
             # count the ballot_orders that exceed the threshold for diversity for this first choice.
             diversity_threshold_count = 0
             for ballot_order, count in sorted(ballot_orders[first_choice].items(), key=lambda x: x[1], reverse=True):
-                pct = count / total_votes
-                if pct > self.diversity_threshold:
+                pct = count / num_active_ballots
+                if pct > self.diversity_threshold and ranked_counts[ballot_order] > 1:
                     diversity_threshold_count += 1
                 if self.debug:
-                    print(f"{first_choice.name:<20} {ballot_order:<70} "
+                    # print the ballot_order and set the length to the maximum length of any ballot_order
+                    print(f"{ballot_order:<{max_ballot_order_len}} "
                           f"count {count:6d} "
-                          f"total_votes {total_votes:6d} "
                           f"pct {pct * 100:5.2f} "
-                          f"diversity_threshold_count {diversity_threshold_count:2d}")
+                          f"dtc {diversity_threshold_count:2d}")
 
-            diversity_scores.append(DiversityScore(first_choice, diversity_threshold_count, total_votes))
+            diversity_scores.append(DiversityScore(first_choice, diversity_threshold_count, first_place_votes))
 
         return sorted(diversity_scores)
 
@@ -126,11 +150,11 @@ class DiversityRunoffElection(Election):
                 if ds.first_place_votes / total_votes > .5:
                     winner = ds.candidate
                     print("%-30s wins with %.2f%% of the vote" % (winner.name, ds.first_place_votes / total_votes * 100))
-                    break;
+                    break
 
             # remove the ast place diversity score from the race.
             last_place: DiversityScore = diversity_scores[-1]
-            if self.debug:
+            if self.debug and not winner:
                 print(
                     f"last place is %-30s " % last_place.candidate.name +
                     f"diversity %2d " % last_place.ballot_orders +

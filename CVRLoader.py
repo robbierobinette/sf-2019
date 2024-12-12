@@ -6,8 +6,8 @@ from typing import List
 
 from elections.Candidate import Candidate
 from elections.Party import NoParty
+from elections.Party import Party
 from Contest import Contest
-
 
 
 # there is a lot of conflict between my terminology for elections and the JSON terminology
@@ -17,7 +17,6 @@ from Contest import Contest
 #
 # There is also conflict between my class 'Contest' which mirrors json defined contests in the
 # CVR files.  Sorry for the confusion.
-
 class CVRLoader(object):
     def __init__(self, cvr_directory: str, max_sessions: int = 1000000000):
         self.cvr_directory = cvr_directory
@@ -26,6 +25,10 @@ class CVRLoader(object):
         self.candidates_by_id = {}
         self.candidate_sets = {}
         self.contest_description_by_id = {}
+        self.number_of_ranks_by_id = {}
+        self.parties_by_id = {
+            0: Party("zero", 0)
+        }
         self.elections = {}
 
         self.load()
@@ -58,23 +61,25 @@ class CVRLoader(object):
             if path.exists(json_file):
                 print(f"loading cvr from json {json_file}")
                 cvr = json.load(open(json_file, "r"))
-                ss = cvr['Sessions'][0 : self.max_sessions]
+                ss = cvr['Sessions'][0: self.max_sessions]
             else:
                 ss = self.load_all_cvr_export_files(cvr_dir)
 
             self.pickle_sessions(ss, pickle_file)
             return ss
 
-    def parse_all_cvr(self, sessions, contests, candidate_sets, candidates_by_id):
-        for session in sessions:
+    def parse_all_cvr(self):
+        for session in self.sessions:
             for card in session["Original"]["Cards"]:
                 for contest in card["Contests"]:
                     election_id = contest['Id']
                     if election_id not in self.elections:
                         self.elections[election_id] = Contest(election_id,
-                                                         contests[election_id],
-                                                         candidate_sets[election_id],
-                                                         candidates_by_id)
+                                                            self.contest_description_by_id[election_id],
+                                                            self.candidate_sets[election_id],
+                                                            self.candidates_by_id,
+                                                            self.parties_by_id,
+                                                            self.number_of_ranks_by_id[election_id])
 
                     self.elections[election_id].add_marks(contest['Marks'])
 
@@ -90,27 +95,33 @@ class CVRLoader(object):
             Download that file and unzip it (your browser may automatically unzip it.)
             place the root directory ./{cvr_dir} in the local directory.
 
-            Alternately, you can change the variable 'cvr_dir' at the top of main() to point at the location of the ballots.
+            Alternately, you can change the variable 'cvr_dir' at the top of main() to point at the location 
+            of the ballots.
 
             """)
 
         contest_json = json.load(open(f"{cvr_dir}/ContestManifest.json", "r"))
         candidates_json = json.load(open(f"{cvr_dir}/CandidateManifest.json"))
+        parties_json = json.load(open(f"{cvr_dir}/PartyManifest.json"))
 
         print("composing meta data")
         # create a map from the contest_id to the contest description
         for c in contest_json['List']:
             self.contest_description_by_id[c["Id"]] = c["Description"]
+            self.number_of_ranks_by_id[c["Id"]] = c["NumOfRanks"]
 
         # create a map of candidates by id
         # create a map of elections to a list of candidates for that election
         for c in candidates_json['List']:
-            candidate = Candidate(c['Description'], NoParty)
+            candidate = Candidate(c['Description'], NoParty, c['Id'])
             self.candidates_by_id[c['Id']] = candidate
             if c['ContestId'] in self.candidate_sets:
                 self.candidate_sets[c['ContestId']].append(candidate)
             else:
                 self.candidate_sets[c['ContestId']] = [candidate]
+
+        for pj in parties_json['List']:
+            self.parties_by_id[pj['Id']] = Party(pj['Description'], pj['Id'])
 
         # load all sessions
         self.sessions = self.load_sessions(cvr_dir)
@@ -118,4 +129,4 @@ class CVRLoader(object):
 
         print("creating contests")
         # create a 'Contest' for each election and parse the ballots.
-        self.parse_all_cvr(self.sessions, self.contest_description_by_id, self.candidate_sets, self.candidates_by_id)
+        self.parse_all_cvr()

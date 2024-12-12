@@ -11,7 +11,7 @@ from elections.PluralityElection import PluralityResult
 
 
 class Contest:
-    def __init__(self, contest_id: int, name: str, candidates: List[Candidate], candidates_by_id: {}):
+    def __init__(self, contest_id: int, name: str, candidates: List[Candidate], candidates_by_id: {}, parties_by_id: {}, number_of_ranks: int):
         self.contest_id = contest_id
         self.name = name
         self.ballots = []
@@ -26,10 +26,13 @@ class Contest:
         self.write_in_skipped = 0
         self.candidates = candidates
         self.candidates_by_id = candidates_by_id
+        self.parties_by_id = parties_by_id
         self.write_in_candidates = 0
         self.write_in_indices = set()
         self.write_in_densities = defaultdict(int)
         self.is_ranked_choice = False
+        self.parties_by_candidate = {}
+        self.number_of_ranks = number_of_ranks
 
     def fill_third(self, names):
         if len(names) != 2:
@@ -131,6 +134,10 @@ class Contest:
 
         for m in marks:
             c, r = m['CandidateId'], m['Rank']
+
+            if 'PartyId' in m:
+                self.parties_by_candidate[c] = self.parties_by_id[m['PartyId']]
+
             if m['IsAmbiguous']:
                 # this mark is ambiguous, mark density is low (< 25) it should be completely ignored.
                 self.ambiguous_mattered += 1

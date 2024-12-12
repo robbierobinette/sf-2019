@@ -9,6 +9,12 @@ class InstantRunoffResult(ElectionResult):
         super().__init__(ordered_candidates)
         self.rounds = rounds
 
+    def print(self):
+        for i, r in enumerate(self.rounds):
+            print(f"Round {i+1}")
+            r.print()
+            print("")
+
 
 class InstantRunoffElection(Election):
     def __init__(self, ballots: BallotIter, candidates: Set[Candidate]):

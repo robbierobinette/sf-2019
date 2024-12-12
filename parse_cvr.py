@@ -312,9 +312,9 @@ def main():
     print(f"number of sessions: {len(sessions)}")
     elections = parse_all_cvr(sessions, contests, candidate_sets, candidates_by_id)
     for contest in elections.values():
-        # contest.run_elections()
+        contest.run_elections()
         # contest.print_ballots()
-        contest.show_diversity_count()
+        # contest.show_diversity_count()
 
 
 main()

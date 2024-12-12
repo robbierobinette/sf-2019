@@ -7,6 +7,11 @@ class PluralityResult(ElectionResult):
         super().__init__(ordered_candidates)
         self.vote_totals = vote_totals
 
+    def print(self):
+        for c in self.ordered_candidates:
+            print(f"{c.name} {self.vote_totals[c]}")
+        print("")
+
 
 class PluralityElection(Election):
     def __init__(self, ballots: BallotIter, active_candidates: Set[Candidate]):

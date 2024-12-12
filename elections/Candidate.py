@@ -6,3 +6,4 @@ from dataclasses import dataclass
 class Candidate:
     name: str
     party: Party
+    id: int = 0
