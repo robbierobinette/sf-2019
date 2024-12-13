@@ -6,6 +6,7 @@ class PluralityResult(ElectionResult):
     def __init__(self, ordered_candidates: List[Candidate], vote_totals: {}):
         super().__init__(ordered_candidates)
         self.vote_totals = vote_totals
+        self.total_votes = sum(vote_totals.values())
 
     def print(self):
         for c in self.ordered_candidates:

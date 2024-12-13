@@ -19,9 +19,10 @@ class InstantRunoffResult(ElectionResult):
 class InstantRunoffElection(Election):
     def __init__(self, ballots: BallotIter, candidates: Set[Candidate]):
         super().__init__(ballots, candidates)
+        self._result = self.compute_result()
 
     def result(self) -> InstantRunoffResult:
-        return self.compute_result()
+        return self._result
 
     def compute_result(self) -> InstantRunoffResult:
         active_candidates = self.candidates.copy()
